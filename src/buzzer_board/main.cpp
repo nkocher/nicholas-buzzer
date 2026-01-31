@@ -59,7 +59,7 @@ var state='IDLE',sock=null,timer=null,connected=false;
 var btn=document.getElementById('buzz');
 var ind=document.getElementById('indicator');
 var dot=document.getElementById('status');
-var SERVER='192.168.0.200';
+var SERVER=window.location.hostname;
 
 function ui(){
   btn.className=(state!=='IDLE'||!connected)?'off':'';
