@@ -72,11 +72,11 @@ void setup() {
     // pins
     pinMode(PIN_RGB_RED, OUTPUT);
     pinMode(PIN_RGB_GREEN, OUTPUT);
-    pinMode(PIN_BUZZ_BTN, INPUT);  // HW-483 has onboard pull-down
+    pinMode(PIN_BUZZ_BTN, INPUT_PULLUP);  // internal pull-up; tact button to GND
     digitalWrite(PIN_RGB_RED, LOW);
     digitalWrite(PIN_RGB_GREEN, LOW);
 
-    // button — HW-483 is LOW when released, HIGH when pressed
+    // button — pull-up: HIGH when released, LOW when pressed
     ButtonConfig* cfg = buzzBtn.getButtonConfig();
     cfg->setEventHandler(handleButtonEvent);
     cfg->setFeature(ButtonConfig::kFeatureClick);
