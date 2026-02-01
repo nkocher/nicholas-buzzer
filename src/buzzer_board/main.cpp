@@ -70,7 +70,7 @@ body{font-family:system-ui,sans-serif;display:flex;flex-direction:column;
 <button id="buzz">BUZZ</button>
 <div id="indicator"></div>
 <script>
-var state='IDLE',sock=null,timer=null,connected=false;
+var state='IDLE',sock=null,timer=null,connected=false,rTimer=null;
 var btn=document.getElementById('buzz');
 var ind=document.getElementById('indicator');
 var dot=document.getElementById('status');
@@ -91,11 +91,13 @@ function doBuzz(){
   state='BUZZING';ui();
 }
 
+function reconnect(){if(!rTimer)rTimer=setTimeout(function(){rTimer=null;connect();},3000);}
 function connect(){
-  try{sock=new WebSocket('ws://'+SERVER+'/ws');}catch(e){setTimeout(connect,3000);return;}
+  if(sock){sock.onopen=sock.onclose=sock.onerror=sock.onmessage=null;try{sock.close();}catch(e){}}
+  try{sock=new WebSocket('ws://'+SERVER+'/ws');}catch(e){reconnect();return;}
   sock.onopen=function(){connected=true;ui();};
-  sock.onclose=function(){connected=false;ui();setTimeout(connect,3000);};
-  sock.onerror=function(){sock.close();};
+  sock.onclose=function(){connected=false;ui();reconnect();};
+  sock.onerror=function(){connected=false;ui();reconnect();};
   sock.onmessage=function(e){
     if(e.data==='dismiss'){
       state='DISMISSED';ui();
@@ -111,6 +113,9 @@ function connect(){
 btn.addEventListener('click',doBuzz);
 btn.addEventListener('touchend',function(e){e.preventDefault();doBuzz();});
 
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden&&(!sock||sock.readyState!==1)){connected=false;ui();reconnect();}
+});
 connect();ui();
 </script>
 </body>
