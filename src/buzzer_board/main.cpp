@@ -2,6 +2,8 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <AceButton.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 #include "config.h"
 
 using namespace ace_button;
@@ -13,6 +15,17 @@ unsigned long stateEnteredAt = 0;
 unsigned long lastFlashToggle = 0;
 bool flashOn = false;
 unsigned long lastWifiCheck = 0;
+
+// ---------- temperature sensor ----------
+OneWire oneWire(PIN_TEMP_DATA);
+DallasTemperature tempSensor(&oneWire);
+DeviceAddress tempAddr;
+float lastTempF;
+bool hasTempReading = false;
+bool tempSensorFound = false;
+bool tempRequested = false;
+unsigned long tempRequestedAt = 0;
+unsigned long lastTempRead = 0;
 
 // ---------- peripherals ----------
 AsyncWebServer server(SERVER_PORT);
@@ -48,9 +61,11 @@ body{font-family:system-ui,sans-serif;display:flex;flex-direction:column;
 #status{position:fixed;top:12px;right:12px;width:10px;height:10px;border-radius:50%;
         background:#e53e3e;transition:background .3s}
 #status.ok{background:#38a169}
+#temp{position:fixed;top:12px;left:0;right:0;text-align:center;color:#888;font-size:0.85rem}
 </style>
 </head>
 <body>
+<div id="temp"></div>
 <div id="status"></div>
 <button id="buzz">BUZZ</button>
 <div id="indicator"></div>
@@ -59,6 +74,7 @@ var state='IDLE',sock=null,timer=null,connected=false;
 var btn=document.getElementById('buzz');
 var ind=document.getElementById('indicator');
 var dot=document.getElementById('status');
+var tmp=document.getElementById('temp');
 var SERVER=window.location.hostname;
 
 function ui(){
@@ -85,6 +101,9 @@ function connect(){
       state='DISMISSED';ui();
       clearTimeout(timer);
       timer=setTimeout(function(){state='IDLE';ui();},5000);
+    } else if(e.data.startsWith('temp:')){
+      var f=parseFloat(e.data.substring(5));
+      if(!isNaN(f)) tmp.textContent='it is currently '+f.toFixed(1)+'\u00B0F in there';
     }
   };
 }
@@ -152,6 +171,11 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
     switch (type) {
     case WS_EVT_CONNECT:
         Serial.printf("[WS] Client #%u connected\n", client->id());
+        if (hasTempReading) {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "temp:%.1f", lastTempF);
+            client->text(buf);
+        }
         break;
     case WS_EVT_DISCONNECT:
         Serial.printf("[WS] Client #%u disconnected\n", client->id());
@@ -200,6 +224,22 @@ void setup() {
         Serial.print(".");
     }
     Serial.printf("\nWiFi connected — IP: %s\n", WiFi.localIP().toString().c_str());
+
+    // temperature sensor
+    tempSensor.begin();
+    tempSensor.setWaitForConversion(false);
+    if (tempSensor.getDeviceCount() > 0 && tempSensor.getAddress(tempAddr, 0)) {
+        tempSensorFound = true;
+        tempSensor.setResolution(tempAddr, 12);
+        Serial.printf("DS18B20 found, address: ");
+        for (uint8_t i = 0; i < 8; i++) Serial.printf("%02X", tempAddr[i]);
+        Serial.println();
+        tempSensor.requestTemperatures();
+        tempRequested = true;
+        tempRequestedAt = millis();
+    } else {
+        Serial.println("DS18B20 not found — temperature disabled");
+    }
 
     // WebSocket handler
     ws.onEvent(onWsEvent);
@@ -250,6 +290,31 @@ void loop() {
     // dismissed → idle after timeout
     if (state == DISMISSED && millis() - stateEnteredAt >= DISMISSED_DURATION) {
         enterState(IDLE);
+    }
+
+    // temperature sensor — non-blocking async read
+    if (tempSensorFound) {
+        unsigned long now = millis();
+        if (!tempRequested && now - lastTempRead >= TEMP_READ_INTERVAL) {
+            tempSensor.requestTemperatures();
+            tempRequested = true;
+            tempRequestedAt = now;
+        }
+        if (tempRequested && now - tempRequestedAt >= TEMP_CONVERT_WAIT) {
+            tempRequested = false;
+            lastTempRead = now;
+            float reading = tempSensor.getTempF(tempAddr);
+            if (reading == DEVICE_DISCONNECTED_F) {
+                Serial.println("[TEMP] Read failed (disconnected)");
+            } else {
+                lastTempF = reading;
+                hasTempReading = true;
+                char buf[16];
+                snprintf(buf, sizeof(buf), "temp:%.1f", lastTempF);
+                ws.textAll(buf);
+                Serial.printf("[TEMP] %.1f°F\n", lastTempF);
+            }
+        }
     }
 
     // WiFi reconnect check

@@ -15,6 +15,7 @@
 #define PIN_DISMISS_BTN  26
 #define PIN_LED_RED      32
 #define PIN_LED_GREEN    33
+#define PIN_TEMP_DATA    4
 
 // ESP32 #2 pins (sender board)
 #define PIN_BUZZ_BTN     18
@@ -27,3 +28,5 @@
 #define WS_RECONNECT_MS      5000
 #define BUZZER_TIMEOUT       10000
 #define WIFI_CHECK_INTERVAL  10000
+#define TEMP_READ_INTERVAL   10000
+#define TEMP_CONVERT_WAIT    800
