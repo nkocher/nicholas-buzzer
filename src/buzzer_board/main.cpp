@@ -4,7 +4,9 @@
 #include <AceButton.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <Preferences.h>
 #include "config.h"
+#include "songs.h"
 
 using namespace ace_button;
 
@@ -141,69 +143,46 @@ static const uint16_t melodyFurElise[][2] = {
 };
 
 // Pink Panther — robsoncouto, tempo=120, wholenote=2000ms
-// Skipping 3 intro rests; Ds4 through E4 half note
+// Skipping 3 intro rests; re-converted with correct dotted note durations
 static const uint16_t melodyPinkPanther[][2] = {
-    {Ds4, 500}, {E4, 250}, {REST, 250}, {Fs4, 500}, {G4, 250}, {REST, 250},
-    {Ds4, 500}, {E4, 250}, {REST, 250}, {Fs4, 500}, {G4, 250}, {REST, 250},
-    {C5, 500}, {B4, 500}, {E4, 500}, {G4, 500},
-    {B4, 500}, {Ab4, 1000}, {REST, 250},
-    {E4, 500}, {G4, 500}, {B4, 500},
+    {Ds4, 250}, {E4, 750}, {REST, 250}, {Fs4, 250}, {G4, 750}, {REST, 250},
+    {Ds4, 250}, {E4, 375}, {Fs4, 250}, {G4, 375}, {C5, 250}, {B4, 375}, {E4, 250}, {G4, 375}, {B4, 250},
+    {Bb4, 1000}, {A4, 188}, {G4, 188}, {E4, 188}, {D4, 188},
+    {E4, 1000},
     {0, 0}
 };
 
 // Super Mario Bros — robsoncouto, tempo=200, wholenote=1200ms
-// First 30 notes of opening section
+// First 31 notes re-converted with correct quarter/dotted durations
 static const uint16_t melodyMario[][2] = {
-    {E5, 150}, {E5, 150}, {REST, 150}, {E5, 150},
-    {REST, 150}, {C5, 150}, {E5, 150}, {REST, 150},
-    {G5, 150}, {REST, 450}, {G4, 150}, {REST, 450},
-    {C5, 300}, {REST, 150}, {G4, 300}, {REST, 150},
-    {E4, 300}, {REST, 150}, {A4, 150}, {REST, 150},
-    {B4, 150}, {REST, 150}, {Bb4, 150}, {A4, 150}, {REST, 150},
-    {G4, 200}, {E5, 200}, {G5, 200},
-    {A5, 150}, {REST, 150}, {F5, 150},
+    {E5, 150}, {E5, 150}, {REST, 150}, {E5, 150}, {REST, 150}, {C5, 150}, {E5, 150},
+    {G5, 300}, {REST, 300}, {G4, 150}, {REST, 300},
+    {C5, 450}, {G4, 150}, {REST, 300}, {E4, 450},
+    {A4, 300}, {B4, 300}, {Bb4, 150}, {A4, 300},
+    {G4, 225}, {E5, 225}, {G5, 225}, {A5, 300}, {F5, 150}, {G5, 150},
+    {REST, 150}, {E5, 300}, {C5, 150}, {D5, 150}, {B4, 450},
     {0, 0}
 };
 
 // Take On Me — robsoncouto, tempo=140, wholenote=1714ms
-// 2× of the 16-note synth riff, all 8th notes = 214ms
+// Section 1 + Section 2 of synth riff, all 8th notes = 214ms
 static const uint16_t melodyTakeOnMe[][2] = {
-    {Fs5, 214}, {Fs5, 214}, {D5, 214}, {B4, 214},
-    {REST, 214}, {B4, 214}, {REST, 214}, {E5, 214},
-    {REST, 214}, {E5, 214}, {REST, 214}, {E5, 214},
-    {Gs5, 214}, {Gs5, 214}, {A5, 214}, {B5, 214},
-    {Fs5, 214}, {Fs5, 214}, {D5, 214}, {B4, 214},
-    {REST, 214}, {B4, 214}, {REST, 214}, {E5, 214},
-    {REST, 214}, {E5, 214}, {REST, 214}, {E5, 214},
-    {Gs5, 214}, {Gs5, 214}, {A5, 214}, {B5, 214},
+    // Section 1
+    {Fs5, 214}, {Fs5, 214}, {D5, 214}, {B4, 214}, {REST, 214}, {B4, 214}, {REST, 214}, {E5, 214},
+    {REST, 214}, {E5, 214}, {REST, 214}, {E5, 214}, {Gs5, 214}, {Gs5, 214}, {A5, 214}, {B5, 214},
+    // Section 2
+    {A5, 214}, {A5, 214}, {A5, 214}, {E5, 214}, {REST, 214}, {D5, 214}, {REST, 214}, {Fs5, 214},
+    {REST, 214}, {Fs5, 214}, {REST, 214}, {Fs5, 214}, {E5, 214}, {E5, 214}, {Fs5, 214}, {E5, 214},
     {0, 0}
 };
 
 // Pac-Man — robsoncouto, tempo=105, wholenote=2286ms
-// Full intro, fast 16th/32nd notes
+// Full intro, corrected dotted 16th (214ms) and 32nd (71ms) durations
 static const uint16_t melodyPacMan[][2] = {
-    {B4, 143}, {B5, 143}, {Fs5, 143}, {Ds5, 143},
-    {B5, 72}, {Fs5, 286}, {Ds5, 286},
-    {C5, 143}, {C6, 143}, {G5, 143}, {E5, 143},
-    {C6, 72}, {G5, 286}, {E5, 286},
-    {B4, 143}, {B5, 143}, {Fs5, 143}, {Ds5, 143},
-    {B5, 72}, {Fs5, 286}, {Ds5, 286},
-    {Ds5, 143}, {E5, 143}, {F5, 143},
-    {REST, 143}, {F5, 143}, {Fs5, 143}, {G5, 143},
-    {REST, 143}, {G5, 143}, {Ab5, 143}, {A5, 143},
-    {B5, 571},
-    {0, 0}
-};
-
-// Cantina Band (Star Wars) — robsoncouto, tempo=140, wholenote=1714ms
-// First phrase through dotted half
-static const uint16_t melodyCantina[][2] = {
-    {A4, 214}, {D5, 214}, {A4, 214}, {D5, 214},
-    {A4, 214}, {D5, 428}, {A4, 214},
-    {REST, 214}, {A4, 214}, {D5, 214}, {A4, 214},
-    {REST, 214}, {G4, 214}, {REST, 214},
-    {G4, 214}, {Fs4, 214}, {G4, 214}, {Fs4, 214},
-    {A4, 428}, {D4, 1286},
+    {B4, 143}, {B5, 143}, {Fs5, 143}, {Ds5, 143}, {B5, 71}, {Fs5, 214}, {Ds5, 286},
+    {C5, 143}, {C6, 143}, {G5, 143}, {E5, 143}, {C6, 71}, {G5, 214}, {E5, 286},
+    {B4, 143}, {B5, 143}, {Fs5, 143}, {Ds5, 143}, {B5, 71}, {Fs5, 214}, {Ds5, 286},
+    {Ds5, 71}, {E5, 71}, {F5, 71}, {F5, 71}, {Fs5, 71}, {G5, 71}, {G5, 71}, {Gs5, 71}, {A5, 143}, {B5, 286},
     {0, 0}
 };
 
@@ -217,93 +196,80 @@ static const uint16_t melodyOdeToJoy[][2] = {
     {0, 0}
 };
 
-// Coffin Dance / Astronomia — LaplaceTW, fixed timing
-// dur 5→200ms, dur 3→333ms. Intro riff + first melodic phrase
+// Coffin Dance / Astronomia — Arduino Project Hub source, 128 BPM, 8th=234ms
+// Main melody: C5-Bb4-A4-F4 pattern in Bb4/A4 range
 static const uint16_t melodyCoffinDance[][2] = {
-    {REST, 200}, {A4, 200}, {REST, 200}, {A4, 200},
-    {A4, 200}, {Ab4, 200}, {A4, 200}, {REST, 200},
-    {A4, 200}, {Ab4, 200}, {A4, 200}, {G4, 200},
-    {REST, 200}, {G4, 200}, {A4, 200}, {REST, 200},
-    {D4, 200}, {REST, 200}, {D4, 333},
-    {A4, 333}, {G4, 333}, {Fs4, 333}, {E4, 333}, {Fs4, 333},
-    {A4, 200}, {G4, 200}, {A4, 200}, {B4, 200},
-    {A4, 200}, {G4, 200}, {A4, 200}, {REST, 200},
-    {A4, 333}, {G4, 333}, {Fs4, 333}, {E4, 333}, {Fs4, 333},
-    {A4, 200}, {G4, 200}, {A4, 200}, {B4, 200},
-    {A4, 200}, {G4, 200}, {A4, 200}, {REST, 200},
-    {D5, 333}, {D5, 333}, {D5, 333},
+    {C5, 234}, {Bb4, 234}, {A4, 234}, {F4, 234},
+    {G4, 234}, {REST, 234}, {G4, 234}, {D5, 234},
+    {C5, 234}, {REST, 234}, {Bb4, 234}, {REST, 234},
+    {A4, 234}, {REST, 234}, {A4, 234}, {A4, 234},
+    {C5, 234}, {REST, 234}, {Bb4, 234}, {A4, 234},
+    {G4, 234}, {REST, 234}, {G4, 234}, {Bb4, 234},
+    {A4, 234}, {Bb4, 234}, {A4, 234}, {Bb4, 234},
+    {G4, 234}, {REST, 234}, {G4, 234}, {Bb4, 234},
+    {A4, 234}, {Bb4, 234}, {A4, 234}, {Bb4, 234},
     {0, 0}
 };
 
-// Keyboard Cat — robsoncouto, tempo=160, wholenote=1500ms
-// Skip 2 whole-note rests. Three 8-note descending arpeggios
+// Keyboard Cat — robsoncouto arrangement, tempo=160, wholenote=1500ms
+// Octave 3/4 per robsoncouto source, mixed quarter/8th/dotted rhythms
 static const uint16_t melodyKeyboardCat[][2] = {
-    {C5, 375}, {E5, 375}, {G5, 375}, {E5, 375},
-    {C5, 375}, {E5, 375}, {G5, 375}, {E5, 375},
-    {B4, 375}, {D5, 375}, {G5, 375}, {D5, 375},
-    {B4, 375}, {D5, 375}, {G5, 375}, {D5, 375},
-    {A4, 375}, {C5, 375}, {E5, 375}, {C5, 375},
-    {A4, 375}, {C5, 375}, {E5, 375}, {C5, 375},
+    {C4, 375}, {E4, 375}, {G4, 375}, {E4, 375},
+    {C4, 375}, {E4, 188}, {G4, 563}, {E4, 375},
+    {A3, 375}, {C4, 375}, {E4, 375}, {C4, 375},
+    {A3, 375}, {C4, 188}, {E4, 563}, {C4, 375},
+    {G3, 375}, {B3, 375}, {D4, 375}, {B3, 375},
+    {G3, 375}, {B3, 188}, {D4, 563}, {B3, 375},
     {0, 0}
 };
 
-// Still D.R.E. — HiBit, dur=1000/val
-// A5×11 + G5×5 + A5×11 + G5×5 + sustained ending
+// Still D.R.E. — HiBit, 275ms per fast note (~109 BPM)
+// A5×11 + G5×5 + A5×11 + G5×5 + sustained ending. ~12.9s/loop, 3 loops ≈ 39.6s
 static const uint16_t melodyStillDRE[][2] = {
-    {A5, 200}, {A5, 200}, {A5, 200}, {A5, 200},
-    {A5, 200}, {A5, 200}, {A5, 200}, {A5, 200},
-    {A5, 200}, {A5, 200}, {A5, 200},
-    {G5, 200}, {G5, 200}, {G5, 200}, {G5, 200}, {G5, 200},
-    {A5, 200}, {A5, 200}, {A5, 200}, {A5, 200},
-    {A5, 200}, {A5, 200}, {A5, 200}, {A5, 200},
-    {A5, 200}, {A5, 200}, {A5, 200},
-    {G5, 200}, {G5, 200}, {G5, 200}, {G5, 200}, {G5, 200},
-    {A5, 1000}, {G5, 500}, {A5, 1000}, {G5, 500},
+    {A5, 275}, {A5, 275}, {A5, 275}, {A5, 275},
+    {A5, 275}, {A5, 275}, {A5, 275}, {A5, 275},
+    {A5, 275}, {A5, 275}, {A5, 275},
+    {G5, 275}, {G5, 275}, {G5, 275}, {G5, 275}, {G5, 275},
+    {A5, 275}, {A5, 275}, {A5, 275}, {A5, 275},
+    {A5, 275}, {A5, 275}, {A5, 275}, {A5, 275},
+    {A5, 275}, {A5, 275}, {A5, 275},
+    {G5, 275}, {G5, 275}, {G5, 275}, {G5, 275}, {G5, 275},
+    {A5, 1375}, {G5, 688}, {A5, 1375}, {G5, 688},
     {0, 0}
 };
 
-// Funkytown — 8th=300ms
-// 2× of the hook: C5 C5 Bb4 C5 r G4 r G4 C5 F5 E5 C5 r(600)
+// Funkytown — ~128 BPM, 8th=234ms
+// 2× of the hook: C5 C5 Bb4 C5 r G4 r G4 C5 F5 E5 C5 r(469)
 static const uint16_t melodyFunkytown[][2] = {
-    {C5, 300}, {C5, 300}, {Bb4, 300}, {C5, 300},
-    {REST, 300}, {G4, 300}, {REST, 300}, {G4, 300},
-    {C5, 300}, {F5, 300}, {E5, 300}, {C5, 300},
-    {REST, 600},
-    {C5, 300}, {C5, 300}, {Bb4, 300}, {C5, 300},
-    {REST, 300}, {G4, 300}, {REST, 300}, {G4, 300},
-    {C5, 300}, {F5, 300}, {E5, 300}, {C5, 300},
-    {REST, 600},
+    {C5, 234}, {C5, 234}, {Bb4, 234}, {C5, 234},
+    {REST, 234}, {G4, 234}, {REST, 234}, {G4, 234},
+    {C5, 234}, {F5, 234}, {E5, 234}, {C5, 234},
+    {REST, 469},
+    {C5, 234}, {C5, 234}, {Bb4, 234}, {C5, 234},
+    {REST, 234}, {G4, 234}, {REST, 234}, {G4, 234},
+    {C5, 234}, {F5, 234}, {E5, 234}, {C5, 234},
+    {REST, 469},
     {0, 0}
 };
 
-// Mask Off (Future) — D minor flute melody
-// Transcribed from the iconic flute riff
-static const uint16_t melodyMaskOff[][2] = {
-    {A5, 250}, {G5, 250}, {F5, 250}, {A5, 250},
-    {G5, 250}, {F5, 250}, {E5, 250}, {D5, 250},
-    {REST, 250},
-    {D5, 250}, {E5, 250}, {F5, 250}, {E5, 250}, {D5, 500},
-    {REST, 250},
-    {A5, 250}, {G5, 250}, {F5, 250}, {A5, 250},
-    {G5, 250}, {F5, 250}, {E5, 250}, {D5, 250},
-    {REST, 250},
-    {D5, 250}, {E5, 250}, {F5, 250}, {E5, 250}, {D5, 500},
+
+// Like a Prayer (Madonna) — D minor, 112 BPM, chorus vocal
+static const uint16_t melodyLikeAPrayer[][2] = {
+    // "Life is a mystery" / "When you call my name"
+    {G4, 268}, {G4, 268}, {G4, 536}, {G4, 268}, {F4, 536},
+    {REST, 268},
+    // "it's like a little prayer"
+    {G4, 268}, {G4, 268}, {A4, 268}, {F4, 536}, {F4, 268},
+    {REST, 268},
+    // "I'm down on my knees"
+    {G4, 268}, {G4, 268}, {G4, 268}, {F4, 536},
+    {REST, 268},
+    // "I wanna take you there"
+    {A4, 268}, {F4, 268}, {F4, 268}, {A4, 268}, {G4, 268}, {F4, 536},
+    {REST, 268},
     {0, 0}
 };
 
-// Hotline Bling (Drake) — D minor bell melody
-// D-D-D-F-E-D-C pattern, transcribed from the bell riff
-static const uint16_t melodyHotlineBling[][2] = {
-    {D5, 300}, {D5, 300}, {D5, 300}, {F5, 450},
-    {E5, 300}, {D5, 300}, {C5, 600},
-    {REST, 300},
-    {D5, 300}, {D5, 300}, {D5, 300}, {F5, 450},
-    {E5, 300}, {D5, 300}, {C5, 600},
-    {REST, 300},
-    {A4, 300}, {A4, 300}, {C5, 300}, {D5, 600},
-    {REST, 300},
-    {0, 0}
-};
 
 struct MelodyEntry {
     const uint16_t (*notes)[2];
@@ -312,7 +278,216 @@ struct MelodyEntry {
 
 #define MELODY_LEN(arr) (sizeof(arr) / sizeof(arr[0]) - 1)  // exclude terminator
 
-static const MelodyEntry melodies[] = {
+// ---------- note frequency helper ----------
+static const uint16_t NOTE_FREQS[12] = { 262,277,294,311,330,349,370,392,415,440,466,494 }; // C4..B4
+
+uint16_t noteFreq(uint8_t semitone, uint8_t octave) {
+    uint16_t f = NOTE_FREQS[semitone % 12];
+    if (octave > 4) f <<= (octave - 4);
+    else if (octave < 4) f >>= (4 - octave);
+    return f;
+}
+
+// Map note letter to semitone index: c=0, d=2, e=4, f=5, g=7, a=9, b=11
+static uint8_t letterToSemitone(char c) {
+    switch (c) {
+        case 'c': return 0;  case 'd': return 2;  case 'e': return 4;
+        case 'f': return 5;  case 'g': return 7;  case 'a': return 9;
+        case 'b': return 11; default:  return 0;
+    }
+}
+
+// ---------- RTTTL parser ----------
+// Format: name:d=4,o=5,b=120:8c,d,e.,4f#,p,g6
+uint16_t parseRTTTL(const char* rtttl, uint16_t out[][2], uint16_t maxNotes) {
+    const char* p = rtttl;
+    // Skip name
+    while (*p && *p != ':') p++;
+    if (!*p) return 0;
+    p++; // skip first ':'
+
+    // Parse defaults
+    uint8_t defDur = 4, defOct = 6;
+    uint16_t bpm = 63;
+    while (*p && *p != ':') {
+        while (*p == ' ' || *p == ',') p++;
+        if (*p == 'd' && *(p+1) == '=') { p += 2; defDur = atoi(p); while (*p >= '0' && *p <= '9') p++; }
+        else if (*p == 'o' && *(p+1) == '=') { p += 2; defOct = atoi(p); while (*p >= '0' && *p <= '9') p++; }
+        else if (*p == 'b' && *(p+1) == '=') { p += 2; bpm = atoi(p); while (*p >= '0' && *p <= '9') p++; }
+        else p++;
+    }
+    if (!*p) return 0;
+    p++; // skip second ':'
+
+    if (bpm == 0) bpm = 63;
+    uint32_t wholeNote = (60000UL * 4) / bpm;
+    uint16_t count = 0;
+
+    while (*p && count < maxNotes) {
+        while (*p == ' ' || *p == ',') p++;
+        if (!*p) break;
+
+        // Optional duration prefix
+        uint8_t dur = 0;
+        while (*p >= '0' && *p <= '9') { dur = dur * 10 + (*p - '0'); p++; }
+        if (dur == 0) dur = defDur;
+
+        // Note letter or 'p' for pause
+        uint16_t freq = 0;
+        if (*p == 'p' || *p == 'P') {
+            p++;
+        } else if ((*p >= 'a' && *p <= 'g') || (*p >= 'A' && *p <= 'G')) {
+            char note = *p | 0x20; // lowercase
+            p++;
+            uint8_t semi = letterToSemitone(note);
+            // Sharp?
+            if (*p == '#') { semi++; p++; }
+            else if (*p == '_') { semi++; p++; } // alternate sharp notation
+            // Octave?
+            uint8_t oct = defOct;
+            if (*p >= '0' && *p <= '9') { oct = *p - '0'; p++; }
+            freq = noteFreq(semi, oct);
+        } else {
+            p++; continue; // skip unknown
+        }
+
+        // Duration in ms
+        uint16_t ms = wholeNote / dur;
+        // Dotted?
+        if (*p == '.') { ms = ms + ms / 2; p++; }
+
+        out[count][0] = freq;
+        out[count][1] = ms;
+        count++;
+    }
+    return count;
+}
+
+// ---------- MML parser ----------
+// Format: MML@t140l8o5cde4f+g>ab<r4c&c,harmony1,harmony2;
+uint16_t parseMML(const char* mml, uint16_t out[][2], uint16_t maxNotes, uint8_t track = 0) {
+    const char* p = mml;
+
+    // Strip MML@ prefix
+    if (p[0]=='M'&&p[1]=='M'&&p[2]=='L'&&p[3]=='@') p += 4;
+
+    // Find the end (strip trailing ;)
+    const char* end = p;
+    while (*end && *end != ';') end++;
+
+    // Select track by comma separation
+    uint8_t currentTrack = 0;
+    while (currentTrack < track && p < end) {
+        if (*p == ',') { currentTrack++; if (currentTrack == track) { p++; break; } }
+        p++;
+    }
+    if (currentTrack != track) return 0;
+
+    // Find end of this track
+    const char* trackEnd = p;
+    while (trackEnd < end && *trackEnd != ',') trackEnd++;
+
+    // State
+    uint8_t octave = 4;
+    uint8_t defaultLength = 4;
+    uint16_t tempo = 120;
+    uint16_t count = 0;
+
+    while (p < trackEnd && count < maxNotes) {
+        char c = *p;
+
+        // Tempo command
+        if (c == 't' || c == 'T') {
+            p++;
+            uint16_t val = 0;
+            while (p < trackEnd && *p >= '0' && *p <= '9') { val = val*10 + (*p-'0'); p++; }
+            if (val > 0) tempo = val;
+            continue;
+        }
+        // Default length
+        if (c == 'l' || c == 'L') {
+            p++;
+            uint8_t val = 0;
+            while (p < trackEnd && *p >= '0' && *p <= '9') { val = val*10 + (*p-'0'); p++; }
+            if (val > 0) defaultLength = val;
+            continue;
+        }
+        // Octave set
+        if (c == 'o' || c == 'O') {
+            p++;
+            uint8_t val = 0;
+            while (p < trackEnd && *p >= '0' && *p <= '9') { val = val*10 + (*p-'0'); p++; }
+            octave = val;
+            continue;
+        }
+        // Octave shift
+        if (c == '>') { octave++; p++; continue; }
+        if (c == '<') { octave--; p++; continue; }
+        // Volume (ignore)
+        if (c == 'v' || c == 'V') {
+            p++;
+            while (p < trackEnd && *p >= '0' && *p <= '9') p++;
+            continue;
+        }
+
+        // Note or rest
+        bool isNote = (c >= 'a' && c <= 'g') || (c >= 'A' && c <= 'G');
+        bool isRest = (c == 'r' || c == 'R');
+
+        if (!isNote && !isRest) { p++; continue; }
+
+        uint16_t freq = 0;
+        if (isNote) {
+            char noteLower = c | 0x20;
+            p++;
+            uint8_t semi = letterToSemitone(noteLower);
+            // Sharp / flat
+            if (p < trackEnd && (*p == '+' || *p == '#')) { semi++; p++; }
+            else if (p < trackEnd && *p == '-') { semi--; p++; }
+            freq = noteFreq(semi, octave);
+        } else {
+            p++; // skip 'r'
+        }
+
+        // Optional length
+        uint8_t noteLen = 0;
+        while (p < trackEnd && *p >= '0' && *p <= '9') { noteLen = noteLen*10 + (*p-'0'); p++; }
+        if (noteLen == 0) noteLen = defaultLength;
+
+        uint32_t wholeNote = (60000UL * 4) / tempo;
+        uint32_t ms = wholeNote / noteLen;
+
+        // Dotted
+        if (p < trackEnd && *p == '.') { ms = ms + ms/2; p++; }
+
+        // Tie (&) — merge with next note of same pitch
+        while (p < trackEnd && *p == '&') {
+            p++;
+            // Skip the tied note letter + modifiers
+            if (p < trackEnd && ((*p >= 'a' && *p <= 'g') || (*p >= 'A' && *p <= 'G'))) {
+                p++;
+                if (p < trackEnd && (*p == '+' || *p == '#' || *p == '-')) p++;
+            } else if (p < trackEnd && (*p == 'r' || *p == 'R')) {
+                p++;
+            }
+            uint8_t tieLen = 0;
+            while (p < trackEnd && *p >= '0' && *p <= '9') { tieLen = tieLen*10 + (*p-'0'); p++; }
+            if (tieLen == 0) tieLen = defaultLength;
+            ms += wholeNote / tieLen;
+            if (p < trackEnd && *p == '.') { ms += (wholeNote / tieLen) / 2; p++; }
+        }
+
+        if (ms > 65535) ms = 65535;
+        out[count][0] = freq;
+        out[count][1] = (uint16_t)ms;
+        count++;
+    }
+    return count;
+}
+
+// Hardcoded melody registry (used by buildMelodyRegistry at boot)
+static const MelodyEntry hardcodedMelodies[] = {
+    { melodyLikeAPrayer,   MELODY_LEN(melodyLikeAPrayer)   },
     { melodyLaCucaracha,   MELODY_LEN(melodyLaCucaracha)   },
     { melodyAxelF,         MELODY_LEN(melodyAxelF)         },
     { melodyGodfather,     MELODY_LEN(melodyGodfather)     },
@@ -324,16 +499,148 @@ static const MelodyEntry melodies[] = {
     { melodyMario,         MELODY_LEN(melodyMario)         },
     { melodyTakeOnMe,      MELODY_LEN(melodyTakeOnMe)      },
     { melodyPacMan,        MELODY_LEN(melodyPacMan)        },
-    { melodyCantina,       MELODY_LEN(melodyCantina)       },
     { melodyOdeToJoy,      MELODY_LEN(melodyOdeToJoy)      },
     { melodyCoffinDance,   MELODY_LEN(melodyCoffinDance)   },
     { melodyKeyboardCat,   MELODY_LEN(melodyKeyboardCat)   },
     { melodyStillDRE,      MELODY_LEN(melodyStillDRE)      },
     { melodyFunkytown,     MELODY_LEN(melodyFunkytown)     },
-    { melodyMaskOff,       MELODY_LEN(melodyMaskOff)       },
-    { melodyHotlineBling,  MELODY_LEN(melodyHotlineBling)  },
 };
-static const uint8_t MELODY_COUNT = sizeof(melodies) / sizeof(melodies[0]);
+static const char* hardcodedNames[] = {
+    "Like a Prayer", "La Cucaracha", "Axel F", "The Godfather",
+    "Die Forelle", "Tetris", "Nokia", "Fur Elise",
+    "Pink Panther", "Super Mario", "Take On Me", "Pac-Man",
+    "Ode to Joy", "Coffin Dance", "Keyboard Cat",
+    "Still D.R.E.", "Funkytown",
+};
+static const uint8_t HARDCODED_COUNT = sizeof(hardcodedMelodies) / sizeof(hardcodedMelodies[0]);
+
+// Mutable melody registry — populated at boot by buildMelodyRegistry()
+static MelodyEntry melodies[256];
+static const char* melodyNames[256];
+static uint8_t MELODY_COUNT = 0;
+
+// Dynamic parsed songs
+#define MAX_NOTES_PER_SONG 256
+static uint16_t (*parsedNotes[128])[2];
+static uint16_t parsedLengths[128];
+static char* parsedNames[128];
+static uint8_t parsedCount = 0;
+
+void parseSongs() {
+    uint16_t tempBuf[MAX_NOTES_PER_SONG][2];
+    char* strBuf = (char*)malloc(4096);
+    if (!strBuf) { Serial.println("[SONGS] malloc failed for strBuf"); return; }
+
+    for (uint8_t i = 0; i < SONG_DEF_COUNT; i++) {
+        SongDef def;
+        memcpy_P(&def, &songDefs[i], sizeof(SongDef));
+
+        // Read PROGMEM string
+        size_t len = strlen_P(def.str);
+        if (len >= 4096) { Serial.printf("[SONGS] #%d too long (%d), skipping\n", i, len); continue; }
+        strncpy_P(strBuf, def.str, 4095);
+        strBuf[4095] = '\0';
+
+        // Read name
+        char nameBuf[64];
+        strncpy_P(nameBuf, def.name, sizeof(nameBuf));
+        nameBuf[sizeof(nameBuf)-1] = '\0';
+
+        // Parse
+        uint16_t count = 0;
+        if (def.fmt == FMT_RTTTL)
+            count = parseRTTTL(strBuf, tempBuf, MAX_NOTES_PER_SONG);
+        else
+            count = parseMML(strBuf, tempBuf, MAX_NOTES_PER_SONG);
+
+        if (count == 0) {
+            Serial.printf("[SONGS] #%d %s: parse failed\n", i, nameBuf);
+            continue;
+        }
+
+        // Allocate exact size for notes
+        parsedNotes[parsedCount] = (uint16_t(*)[2])malloc(count * sizeof(uint16_t[2]));
+        if (!parsedNotes[parsedCount]) { Serial.printf("[SONGS] #%d malloc failed\n", i); continue; }
+        memcpy(parsedNotes[parsedCount], tempBuf, count * sizeof(uint16_t[2]));
+        parsedLengths[parsedCount] = count;
+
+        // Copy name
+        parsedNames[parsedCount] = strdup(nameBuf);
+
+        Serial.printf("[SONGS] #%d %s: %d notes\n", i, nameBuf, count);
+        parsedCount++;
+    }
+    free(strBuf);
+    Serial.printf("[SONGS] Parsed %d/%d songs\n", parsedCount, SONG_DEF_COUNT);
+}
+
+void buildMelodyRegistry() {
+    MELODY_COUNT = 0;
+
+    // Parsed songs FIRST (for testing)
+    for (uint8_t i = 0; i < parsedCount; i++) {
+        melodies[MELODY_COUNT] = { parsedNotes[i], parsedLengths[i] };
+        melodyNames[MELODY_COUNT] = parsedNames[i];
+        MELODY_COUNT++;
+    }
+
+    // Hardcoded melodies
+    for (uint8_t i = 0; i < HARDCODED_COUNT; i++) {
+        melodies[MELODY_COUNT] = hardcodedMelodies[i];
+        melodyNames[MELODY_COUNT] = hardcodedNames[i];
+        MELODY_COUNT++;
+    }
+
+    Serial.printf("[SONGS] Registry: %d total melodies\n", MELODY_COUNT);
+}
+
+// ---------- shuffle ----------
+static uint8_t shuffleOrder[256];
+static uint8_t shufflePos = 0;
+static uint32_t shuffleSeed = 0;
+static bool playSpecific = false;
+Preferences prefs;
+
+static uint32_t xorshift32(uint32_t* state) {
+    uint32_t x = *state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *state = x;
+    return x;
+}
+
+void shuffleMelodies(uint32_t seed) {
+    for (uint8_t i = 0; i < MELODY_COUNT; i++) shuffleOrder[i] = i;
+    uint32_t rng = seed;
+    for (uint8_t i = MELODY_COUNT - 1; i > 0; i--) {
+        uint8_t j = xorshift32(&rng) % (i + 1);
+        uint8_t tmp = shuffleOrder[i];
+        shuffleOrder[i] = shuffleOrder[j];
+        shuffleOrder[j] = tmp;
+    }
+}
+
+void saveShuffleState(bool saveSeed) {
+    prefs.begin("buzz", false);
+    if (saveSeed) prefs.putULong("seed", shuffleSeed);
+    prefs.putUChar("pos", shufflePos);
+    prefs.end();
+}
+
+void loadShuffleState() {
+    prefs.begin("buzz", true);
+    shuffleSeed = prefs.getULong("seed", 0);
+    shufflePos = prefs.getUChar("pos", 0);
+    prefs.end();
+    if (shuffleSeed == 0 || shufflePos >= MELODY_COUNT) {
+        shuffleSeed = esp_random();
+        shufflePos = 0;
+        saveShuffleState(true);
+    }
+    shuffleMelodies(shuffleSeed);
+    Serial.printf("[SHUFFLE] seed=%lu pos=%d/%d\n", shuffleSeed, shufflePos, MELODY_COUNT);
+}
 
 // ---------- melody player ----------
 struct MelodyPlayer {
@@ -545,6 +852,89 @@ static const char ICON_SVG[] PROGMEM = R"rawliteral(
 </svg>
 )rawliteral";
 
+static const char SONGS_HTML[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="theme-color" content="#111111">
+<title>Song Picker</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#111;color:#eee;padding:12px}
+h1{text-align:center;margin-bottom:12px;font-size:1.3rem}
+#status{display:inline-block;width:8px;height:8px;border-radius:50%;background:#e53e3e;margin-left:6px;vertical-align:middle}
+#status.ok{background:#38a169}
+#stop{display:block;margin:0 auto 12px;padding:8px 24px;border:none;border-radius:8px;
+      background:#e53e3e;color:#fff;font-size:1rem;cursor:pointer;touch-action:manipulation}
+#stop:active{background:#c53030}
+#now{text-align:center;color:#888;margin-bottom:8px;font-size:0.85rem;min-height:1.2em}
+#list{list-style:none;max-width:600px;margin:0 auto}
+#list li{padding:10px 12px;border-bottom:1px solid #222;cursor:pointer;display:flex;
+         align-items:center;gap:8px;-webkit-tap-highlight-color:transparent}
+#list li:active{background:#222}
+#list .idx{color:#555;font-size:0.75rem;min-width:24px;text-align:right}
+#list .name{flex:1}
+</style>
+</head>
+<body>
+<h1>Songs <span id="status"></span></h1>
+<button id="stop">Stop</button>
+<div id="now"></div>
+<ul id="list"></ul>
+<script>
+var sock=null,connected=false,rTimer=null,songs=[];
+var dot=document.getElementById('status');
+var list=document.getElementById('list');
+var now=document.getElementById('now');
+var SERVER=window.location.hostname;
+function ui(){dot.className=connected?'ok':'';}
+function reconnect(){if(!rTimer)rTimer=setTimeout(function(){rTimer=null;connect();},3000);}
+function connect(){
+  if(sock){sock.onopen=sock.onclose=sock.onerror=sock.onmessage=null;try{sock.close();}catch(e){}}
+  try{sock=new WebSocket('ws://'+SERVER+'/ws');}catch(e){reconnect();return;}
+  sock.onopen=function(){connected=true;ui();};
+  sock.onclose=function(){connected=false;ui();reconnect();};
+  sock.onerror=function(){connected=false;ui();reconnect();};
+  sock.onmessage=function(e){
+    if(e.data==='dismiss'){now.textContent='';}
+  };
+}
+function play(i){
+  if(!sock||sock.readyState!==1)return;
+  sock.send('play:'+i);
+  now.textContent='Playing: '+songs[i].n;
+}
+document.getElementById('stop').addEventListener('click',function(){
+  if(sock&&sock.readyState===1)sock.send('dismiss');
+  now.textContent='';
+});
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden&&(!sock||sock.readyState!==1)){connected=false;ui();reconnect();}
+});
+fetch('/songs.json').then(function(r){return r.json();}).then(function(data){
+  songs=data;
+  data.forEach(function(s){
+    var li=document.createElement('li');
+    var idx=document.createElement('span');
+    idx.className='idx';
+    idx.textContent=s.i;
+    var nm=document.createElement('span');
+    nm.className='name';
+    nm.textContent=s.n;
+    li.appendChild(idx);
+    li.appendChild(nm);
+    li.addEventListener('click',function(){play(s.i);});
+    list.appendChild(li);
+  });
+});
+connect();ui();
+</script>
+</body>
+</html>
+)rawliteral";
+
 // ---------- helpers ----------
 void enterState(State s) {
     state = s;
@@ -558,8 +948,22 @@ void enterState(State s) {
         flashOn = false;
         break;
     case BUZZING:
-        startMelody(currentMelodyIndex);
-        currentMelodyIndex = (currentMelodyIndex + 1) % MELODY_COUNT;
+        if (playSpecific) {
+            startMelody(currentMelodyIndex);
+            playSpecific = false;
+        } else {
+            currentMelodyIndex = shuffleOrder[shufflePos];
+            startMelody(currentMelodyIndex);
+            shufflePos++;
+            if (shufflePos >= MELODY_COUNT) {
+                shuffleSeed = esp_random();
+                shufflePos = 0;
+                shuffleMelodies(shuffleSeed);
+                saveShuffleState(true);
+            } else {
+                saveShuffleState(false);
+            }
+        }
         digitalWrite(PIN_LED_GREEN, LOW);
         digitalWrite(PIN_LED_RED, HIGH);
         flashOn = true;
@@ -601,6 +1005,24 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
             if (len == 4 && memcmp(data, "buzz", 4) == 0 && state == IDLE) {
                 Serial.println("[WS] Received buzz");
                 enterState(BUZZING);
+            } else if (len == 7 && memcmp(data, "dismiss", 7) == 0 && state == BUZZING) {
+                Serial.println("[WS] Received dismiss");
+                enterState(DISMISSED);
+            } else if (len >= 5 && memcmp(data, "play:", 5) == 0) {
+                // play:N — play specific song by index
+                char numBuf[8];
+                size_t numLen = len - 5;
+                if (numLen > 0 && numLen < sizeof(numBuf)) {
+                    memcpy(numBuf, data + 5, numLen);
+                    numBuf[numLen] = '\0';
+                    int idx = atoi(numBuf);
+                    if (idx >= 0 && idx < MELODY_COUNT) {
+                        Serial.printf("[WS] Playing song #%d: %s\n", idx, melodyNames[idx]);
+                        currentMelodyIndex = idx;
+                        playSpecific = true;
+                        enterState(BUZZING);
+                    }
+                }
             }
         }
         break;
@@ -676,10 +1098,39 @@ void setup() {
     server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest* request) {
         request->redirect("/icon.svg");
     });
+    server.on("/songs", HTTP_GET, [](AsyncWebServerRequest* request) {
+        AsyncWebServerResponse* response = request->beginResponse(200, "text/html", SONGS_HTML);
+        response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        request->send(response);
+    });
+    server.on("/songs.json", HTTP_GET, [](AsyncWebServerRequest* request) {
+        String json = "[";
+        for (uint8_t i = 0; i < MELODY_COUNT; i++) {
+            if (i > 0) json += ',';
+            json += "{\"i\":";
+            json += i;
+            json += ",\"n\":\"";
+            // Escape any quotes in song name
+            const char* n = melodyNames[i];
+            while (*n) {
+                if (*n == '"') json += '\\';
+                json += *n;
+                n++;
+            }
+            json += "\"}";
+        }
+        json += "]";
+        request->send(200, "application/json", json);
+    });
     server.onNotFound([](AsyncWebServerRequest* request) {
         Serial.printf("[HTTP] 404: %s\n", request->url().c_str());
         request->send(404, "text/plain", "Not found");
     });
+
+    // Parse songs and build melody registry
+    parseSongs();
+    buildMelodyRegistry();
+    loadShuffleState();
 
     server.begin();
     Serial.println("HTTP + WebSocket server started on port 80");
