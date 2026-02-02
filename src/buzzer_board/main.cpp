@@ -523,7 +523,8 @@ static uint8_t MELODY_COUNT = 0;
 // Parse all PROGMEM song definitions and append directly to the melody registry.
 void parseSongDefs() {
     uint16_t tempBuf[MAX_NOTES_PER_SONG][2];
-    char* strBuf = (char*)malloc(4096);
+    static const size_t STR_BUF_SZ = 6144;
+    char* strBuf = (char*)malloc(STR_BUF_SZ);
     if (!strBuf) { Serial.println("[SONGS] malloc failed for strBuf"); return; }
 
     uint8_t parsed = 0;
@@ -533,9 +534,9 @@ void parseSongDefs() {
 
         // Read PROGMEM string
         size_t len = strlen_P(def.str);
-        if (len >= 4096) { Serial.printf("[SONGS] #%d too long (%d), skipping\n", i, len); continue; }
-        strncpy_P(strBuf, def.str, 4095);
-        strBuf[4095] = '\0';
+        if (len >= STR_BUF_SZ) { Serial.printf("[SONGS] #%d too long (%d), skipping\n", i, len); continue; }
+        strncpy_P(strBuf, def.str, STR_BUF_SZ - 1);
+        strBuf[STR_BUF_SZ - 1] = '\0';
 
         // Read name
         char nameBuf[64];
