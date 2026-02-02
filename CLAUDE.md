@@ -23,6 +23,8 @@ Two-board ESP32 buzzer system with a PWA web interface. PlatformIO project, Ardu
 - WebSocket text protocol: short messages like `"buzz"`, `"dismiss"`, `"temp:72.3"`
 - Sender board ignores unknown WS messages by checking `length == 7` for "dismiss" — new message types are safe to add without sender changes
 - State machine pattern: `enum State { IDLE, BUZZING, DISMISSED }` with `enterState()` helper
+- Dismiss button uses sustained-LOW debounce (30ms) — `digitalRead()` must return LOW for 30 consecutive ms before firing. Any pin change resets the timer. AceButton was removed because its debounce silently dropped presses on marginal contacts; single-read edge detection was removed because transient LOW readings from buzzer vibration/EMI caused false dismissals
+- Song strings in `include/songs.h` are PROGMEM (flash); parsed at boot by `parseSongDefs()` with a heap buffer (`STR_BUF_SZ`, currently 6144). Songs longer than this are silently skipped. Check with `curl http://192.168.0.200/songs.json | python3 -c "import json,sys;print(len(json.load(sys.stdin)))"` after flashing.
 
 ## Testing
 
@@ -31,9 +33,15 @@ Two-board ESP32 buzzer system with a PWA web interface. PlatformIO project, Ardu
 
 ## Gotchas
 
+- **ESP32 heap pressure** — each parsed song mallocs a note array (~100-256 notes × 4 bytes) that persists forever. At ~150 songs the board is near its heap limit. Increasing `STR_BUF_SZ` or adding many songs can cause boot loops (board unreachable). Always ping after flashing to confirm it boots.
+- **Song parse buffer** — `parseSongDefs()` in main.cpp silently skips songs whose PROGMEM string exceeds `STR_BUF_SZ`. If songs go missing after adding new ones, check string lengths vs buffer size before assuming a bug elsewhere.
+- **BUZZER_TIMEOUT** — hard stop for melody playback (currently 120s). If songs cut out before finishing, check this value in `config.h` before looking at melody logic. `MELODY_LOOP_PAUSE_MS` only controls the gap between loops.
 - **iOS Safari WebSocket reconnection** — `onerror` → `sock.close()` does not reliably fire `onclose` for sockets that never reached OPEN state. Always schedule reconnection directly from both `onerror` and `onclose`. The fix: call `scheduleReconnect()` from both `onerror` and `onclose`, guard with a `reconnectTimer` to prevent duplicates, and never call `sock.close()` from inside `onerror`.
 - **iOS standalone PWA backgrounding** — iOS kills WebSocket connections when a standalone PWA is backgrounded. Use `visibilitychange` to detect and reconnect.
 - **iOS standalone PWA cold starts** — Standalone PWAs always cold-start on iOS; first-load reliability is critical since there's no "reload" option.
 - **No serial monitor from Claude** — `pio device monitor` requires an interactive TTY (termios); reading `/dev/cu.usbserial-*` via `cat`/`stty` crashes the non-interactive shell. Never attempt raw serial reads.
 - **IDE diagnostics are false positives** — PlatformIO headers won't resolve in VS Code's default C++ intellisense. Build with `pio run` to verify correctness.
 - **secrets.h is required** — build will fail without it. Copy `secrets.h.example` to `secrets.h` and fill in WiFi credentials.
+- **ESP32 dual-core race in `enterState()`** — ESPAsyncWebServer runs WS callbacks on core 0; Arduino `loop()` runs on core 1. `enterState()` sets `state` before the switch body executes, so `loop()` can observe intermediate state (e.g. `state == BUZZING` before `startMelody()` sets `player.playing = true`). Guard with `STATE_SETTLE_MS` (200ms) in `loop()` before checking flags set inside the switch body. Do not pre-set `player.playing` before `state = s` -- `updateMelody()` would dereference `player.melody` (still null/stale) and crash.
+- **Button GPIO noise during buzzer playback** — single-read edge detection on button GPIOs causes false triggers during buzzer playback. Buzzer vibration, ground bounce, and capacitive coupling from the PWM pin can produce transient LOW readings. Always require sustained readings (30ms+) for debounce, not single-sample edge detection.
+- **PlatformIO LDF** — `[env]` lib_deps are shared across all boards but LDF `chain` mode only links libraries that are `#include`d. Safe to remove an `#include` from one board without touching platformio.ini.

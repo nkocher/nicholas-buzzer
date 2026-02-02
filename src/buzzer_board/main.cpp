@@ -1,14 +1,11 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
-#include <AceButton.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <Preferences.h>
 #include "config.h"
 #include "songs.h"
-
-using namespace ace_button;
 
 // ---------- state ----------
 enum State { IDLE, BUZZING, DISMISSED };
@@ -638,10 +635,9 @@ struct MelodyPlayer {
     bool playing;
     bool inGap;
     bool inLoopPause;
-    uint8_t loopCount;
 };
 
-MelodyPlayer player = { nullptr, 0, 0, 0, 0, false, false, false, 0 };
+MelodyPlayer player = { nullptr, 0, 0, 0, 0, false, false, false };
 uint8_t currentMelodyIndex = 0;
 
 void playCurrentNote() {
@@ -669,7 +665,6 @@ void startMelody(uint8_t index) {
     player.playing = true;
     player.inGap = false;
     player.inLoopPause = false;
-    player.loopCount = 0;
     playCurrentNote();
 }
 
@@ -697,12 +692,6 @@ void updateMelody() {
 
     if (player.inLoopPause) {
         if (now - player.noteStartedAt >= MELODY_LOOP_PAUSE_MS) {
-            player.loopCount++;
-            if (player.loopCount >= MELODY_LOOP_COUNT) {
-                player.playing = false;
-                ledcDetachPin(PIN_BUZZER);
-                return;
-            }
             player.noteIndex = 0;
             playCurrentNote();
         }
@@ -734,8 +723,6 @@ void updateMelody() {
 // ---------- peripherals ----------
 AsyncWebServer server(SERVER_PORT);
 AsyncWebSocket ws("/ws");
-AceButton dismissBtn(PIN_DISMISS_BTN);
-
 // ---------- web app ----------
 static const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
@@ -886,7 +873,7 @@ function connect(){
   sock.onclose=function(){connected=false;ui();reconnect();};
   sock.onerror=function(){connected=false;ui();reconnect();};
   sock.onmessage=function(e){
-    if(e.data==='dismiss'){now.textContent='';}
+    if(e.data==='dismiss'||e.data==='busy'){now.textContent='';}
   };
 }
 function play(i){
@@ -942,6 +929,7 @@ uint8_t nextShuffleMelody() {
 }
 
 void enterState(State s) {
+    unsigned long prevDuration = millis() - stateEnteredAt;
     state = s;
     stateEnteredAt = millis();
 
@@ -966,15 +954,10 @@ void enterState(State s) {
         stopMelody();
         digitalWrite(PIN_LED_RED, LOW);
         digitalWrite(PIN_LED_GREEN, HIGH);
+        Serial.printf("[STATE] DISMISSED after %lums — green=%d, ws_clients=%d\n",
+            prevDuration, digitalRead(PIN_LED_GREEN), ws.count());
         ws.textAll("dismiss");
         break;
-    }
-}
-
-// ---------- callbacks ----------
-void handleButtonEvent(AceButton*, uint8_t eventType, uint8_t) {
-    if (eventType == AceButton::kEventPressed && state == BUZZING) {
-        enterState(DISMISSED);
     }
 }
 
@@ -1007,11 +990,13 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
                 memcpy(numBuf, data + 5, len - 5);
                 numBuf[len - 5] = '\0';
                 int idx = atoi(numBuf);
-                if (idx >= 0 && idx < MELODY_COUNT) {
+                if (idx >= 0 && idx < MELODY_COUNT && state == IDLE) {
                     Serial.printf("[WS] Playing song #%d: %s\n", idx, melodyNames[idx]);
                     currentMelodyIndex = idx;
                     playSpecific = true;
                     enterState(BUZZING);
+                } else if (idx >= 0 && idx < MELODY_COUNT) {
+                    client->text("busy");
                 }
             }
         }
@@ -1036,9 +1021,10 @@ void setup() {
     digitalWrite(PIN_LED_RED, LOW);
     digitalWrite(PIN_LED_GREEN, LOW);
 
-    // button
-    ButtonConfig* cfg = dismissBtn.getButtonConfig();
-    cfg->setEventHandler(handleButtonEvent);
+    // LED boot test — verify green LED hardware
+    digitalWrite(PIN_LED_GREEN, HIGH);
+    delay(300);
+    digitalWrite(PIN_LED_GREEN, LOW);
 
     // WiFi with static IP
     IPAddress ip(BUZZER_IP);
@@ -1128,13 +1114,39 @@ void setup() {
 
 // ---------- loop ----------
 void loop() {
-    dismissBtn.check();
+    // dismiss button — sustained-LOW debounce (30ms)
+    // digitalRead() must return LOW for 30 consecutive ms before firing.
+    // Any pin change resets the timer. This filters transient noise from
+    // buzzer vibration, ground bounce, and capacitive coupling.
+    {
+        static bool lastStableState = HIGH;
+        static bool lastReading = HIGH;
+        static unsigned long lastChangeAt = 0;
+
+        bool reading = digitalRead(PIN_DISMISS_BTN);
+        unsigned long now = millis();
+
+        if (reading != lastReading) {
+            lastChangeAt = now;
+        }
+        lastReading = reading;
+
+        if (now - lastChangeAt >= 30 && reading != lastStableState) {
+            lastStableState = reading;
+            if (reading == LOW && state == BUZZING) {
+                Serial.println("[BTN] Dismiss pressed");
+                enterState(DISMISSED);
+            }
+        }
+    }
     ws.cleanupClients();
     updateMelody();
 
     // buzzing: flash red LED + auto-dismiss on melody completion or timeout
     if (state == BUZZING) {
-        if (!player.playing) {
+        // Grace period: enterState() sets state before startMelody() sets
+        // player.playing (dual-core race). See CLAUDE.md "dual-core race" gotcha.
+        if (!player.playing && millis() - stateEnteredAt >= STATE_SETTLE_MS) {
             Serial.println("Melody finished, auto-dismissing");
             enterState(DISMISSED);
             return;
