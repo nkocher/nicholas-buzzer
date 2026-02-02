@@ -515,22 +515,18 @@ static const char* hardcodedNames[] = {
 static const uint8_t HARDCODED_COUNT = sizeof(hardcodedMelodies) / sizeof(hardcodedMelodies[0]);
 
 // Mutable melody registry — populated at boot by buildMelodyRegistry()
+#define MAX_NOTES_PER_SONG 256
 static MelodyEntry melodies[256];
 static const char* melodyNames[256];
 static uint8_t MELODY_COUNT = 0;
 
-// Dynamic parsed songs
-#define MAX_NOTES_PER_SONG 256
-static uint16_t (*parsedNotes[128])[2];
-static uint16_t parsedLengths[128];
-static char* parsedNames[128];
-static uint8_t parsedCount = 0;
-
-void parseSongs() {
+// Parse all PROGMEM song definitions and append directly to the melody registry.
+void parseSongDefs() {
     uint16_t tempBuf[MAX_NOTES_PER_SONG][2];
     char* strBuf = (char*)malloc(4096);
     if (!strBuf) { Serial.println("[SONGS] malloc failed for strBuf"); return; }
 
+    uint8_t parsed = 0;
     for (uint8_t i = 0; i < SONG_DEF_COUNT; i++) {
         SongDef def;
         memcpy_P(&def, &songDefs[i], sizeof(SongDef));
@@ -547,44 +543,33 @@ void parseSongs() {
         nameBuf[sizeof(nameBuf)-1] = '\0';
 
         // Parse
-        uint16_t count = 0;
-        if (def.fmt == FMT_RTTTL)
-            count = parseRTTTL(strBuf, tempBuf, MAX_NOTES_PER_SONG);
-        else
-            count = parseMML(strBuf, tempBuf, MAX_NOTES_PER_SONG);
+        uint16_t count = (def.fmt == FMT_RTTTL)
+            ? parseRTTTL(strBuf, tempBuf, MAX_NOTES_PER_SONG)
+            : parseMML(strBuf, tempBuf, MAX_NOTES_PER_SONG);
 
         if (count == 0) {
             Serial.printf("[SONGS] #%d %s: parse failed\n", i, nameBuf);
             continue;
         }
 
-        // Allocate exact size for notes
-        parsedNotes[parsedCount] = (uint16_t(*)[2])malloc(count * sizeof(uint16_t[2]));
-        if (!parsedNotes[parsedCount]) { Serial.printf("[SONGS] #%d malloc failed\n", i); continue; }
-        memcpy(parsedNotes[parsedCount], tempBuf, count * sizeof(uint16_t[2]));
-        parsedLengths[parsedCount] = count;
+        // Allocate exact-size note array and copy from temp buffer
+        uint16_t (*notes)[2] = (uint16_t(*)[2])malloc(count * sizeof(uint16_t[2]));
+        if (!notes) { Serial.printf("[SONGS] #%d malloc failed\n", i); continue; }
+        memcpy(notes, tempBuf, count * sizeof(uint16_t[2]));
 
-        // Copy name
-        parsedNames[parsedCount] = strdup(nameBuf);
-
+        melodies[MELODY_COUNT] = { notes, count };
+        melodyNames[MELODY_COUNT] = strdup(nameBuf);
+        MELODY_COUNT++;
+        parsed++;
         Serial.printf("[SONGS] #%d %s: %d notes\n", i, nameBuf, count);
-        parsedCount++;
     }
     free(strBuf);
-    Serial.printf("[SONGS] Parsed %d/%d songs\n", parsedCount, SONG_DEF_COUNT);
+    Serial.printf("[SONGS] Parsed %d/%d song defs\n", parsed, SONG_DEF_COUNT);
 }
 
 void buildMelodyRegistry() {
-    MELODY_COUNT = 0;
-
-    // Parsed songs FIRST (for testing)
-    for (uint8_t i = 0; i < parsedCount; i++) {
-        melodies[MELODY_COUNT] = { parsedNotes[i], parsedLengths[i] };
-        melodyNames[MELODY_COUNT] = parsedNames[i];
-        MELODY_COUNT++;
-    }
-
-    // Hardcoded melodies
+    // Parsed songs are already in the registry from parseSongDefs().
+    // Append hardcoded melodies after them.
     for (uint8_t i = 0; i < HARDCODED_COUNT; i++) {
         melodies[MELODY_COUNT] = hardcodedMelodies[i];
         melodyNames[MELODY_COUNT] = hardcodedNames[i];
@@ -692,6 +677,19 @@ void stopMelody() {
     player.playing = false;
 }
 
+// Advance to the next note, or enter loop pause if melody is finished.
+// Returns true if the melody continues, false if pausing between loops.
+bool advanceNote() {
+    player.noteIndex++;
+    if (player.noteIndex >= player.length) {
+        player.inLoopPause = true;
+        player.noteStartedAt = millis();
+        return false;
+    }
+    playCurrentNote();
+    return true;
+}
+
 void updateMelody() {
     if (!player.playing) return;
     unsigned long now = millis();
@@ -712,34 +710,23 @@ void updateMelody() {
 
     if (player.inGap) {
         if (now - player.noteStartedAt >= player.gapDuration) {
-            player.noteIndex++;
-            if (player.noteIndex >= player.length) {
-                player.inLoopPause = true;
-                player.noteStartedAt = now;
-                return;
-            }
-            playCurrentNote();
+            advanceNote();
         }
-    } else {
-        uint16_t duration = player.melody[player.noteIndex][1];
-        uint16_t toneDuration = (player.gapDuration > 0)
-            ? (duration - player.gapDuration) : duration;
+        return;
+    }
 
-        if (now - player.noteStartedAt >= toneDuration) {
-            if (player.gapDuration > 0) {
-                ledcDetachPin(PIN_BUZZER);
-                player.inGap = true;
-                player.noteStartedAt = now;
-            } else {
-                player.noteIndex++;
-                if (player.noteIndex >= player.length) {
-                    player.inLoopPause = true;
-                    player.noteStartedAt = now;
-                    return;
-                }
-                playCurrentNote();
-            }
-        }
+    uint16_t duration = player.melody[player.noteIndex][1];
+    uint16_t toneDuration = (player.gapDuration > 0)
+        ? (duration - player.gapDuration) : duration;
+
+    if (now - player.noteStartedAt < toneDuration) return;
+
+    if (player.gapDuration > 0) {
+        ledcDetachPin(PIN_BUZZER);
+        player.inGap = true;
+        player.noteStartedAt = now;
+    } else {
+        advanceNote();
     }
 }
 
@@ -936,6 +923,23 @@ connect();ui();
 )rawliteral";
 
 // ---------- helpers ----------
+
+// Pick the next melody from the shuffle order and advance the position.
+// Reshuffles and persists state when the full rotation completes.
+uint8_t nextShuffleMelody() {
+    uint8_t idx = shuffleOrder[shufflePos];
+    shufflePos++;
+    if (shufflePos >= MELODY_COUNT) {
+        shuffleSeed = esp_random();
+        shufflePos = 0;
+        shuffleMelodies(shuffleSeed);
+        saveShuffleState(true);
+    } else {
+        saveShuffleState(false);
+    }
+    return idx;
+}
+
 void enterState(State s) {
     state = s;
     stateEnteredAt = millis();
@@ -948,22 +952,10 @@ void enterState(State s) {
         flashOn = false;
         break;
     case BUZZING:
-        if (playSpecific) {
-            startMelody(currentMelodyIndex);
-            playSpecific = false;
-        } else {
-            currentMelodyIndex = shuffleOrder[shufflePos];
-            startMelody(currentMelodyIndex);
-            shufflePos++;
-            if (shufflePos >= MELODY_COUNT) {
-                shuffleSeed = esp_random();
-                shufflePos = 0;
-                shuffleMelodies(shuffleSeed);
-                saveShuffleState(true);
-            } else {
-                saveShuffleState(false);
-            }
-        }
+        if (!playSpecific)
+            currentMelodyIndex = nextShuffleMelody();
+        playSpecific = false;
+        startMelody(currentMelodyIndex);
         digitalWrite(PIN_LED_GREEN, LOW);
         digitalWrite(PIN_LED_RED, HIGH);
         flashOn = true;
@@ -1008,20 +1000,17 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
             } else if (len == 7 && memcmp(data, "dismiss", 7) == 0 && state == BUZZING) {
                 Serial.println("[WS] Received dismiss");
                 enterState(DISMISSED);
-            } else if (len >= 5 && memcmp(data, "play:", 5) == 0) {
+            } else if (len >= 6 && len <= 9 && memcmp(data, "play:", 5) == 0) {
                 // play:N — play specific song by index
                 char numBuf[8];
-                size_t numLen = len - 5;
-                if (numLen > 0 && numLen < sizeof(numBuf)) {
-                    memcpy(numBuf, data + 5, numLen);
-                    numBuf[numLen] = '\0';
-                    int idx = atoi(numBuf);
-                    if (idx >= 0 && idx < MELODY_COUNT) {
-                        Serial.printf("[WS] Playing song #%d: %s\n", idx, melodyNames[idx]);
-                        currentMelodyIndex = idx;
-                        playSpecific = true;
-                        enterState(BUZZING);
-                    }
+                memcpy(numBuf, data + 5, len - 5);
+                numBuf[len - 5] = '\0';
+                int idx = atoi(numBuf);
+                if (idx >= 0 && idx < MELODY_COUNT) {
+                    Serial.printf("[WS] Playing song #%d: %s\n", idx, melodyNames[idx]);
+                    currentMelodyIndex = idx;
+                    playSpecific = true;
+                    enterState(BUZZING);
                 }
             }
         }
@@ -1128,7 +1117,7 @@ void setup() {
     });
 
     // Parse songs and build melody registry
-    parseSongs();
+    parseSongDefs();
     buildMelodyRegistry();
     loadShuffleState();
 
