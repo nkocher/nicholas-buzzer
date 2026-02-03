@@ -193,21 +193,6 @@ static const uint16_t melodyOdeToJoy[][2] = {
     {0, 0}
 };
 
-// Coffin Dance / Astronomia — Arduino Project Hub source, 128 BPM, 8th=234ms
-// Main melody: C5-Bb4-A4-F4 pattern in Bb4/A4 range
-static const uint16_t melodyCoffinDance[][2] = {
-    {C5, 234}, {Bb4, 234}, {A4, 234}, {F4, 234},
-    {G4, 234}, {REST, 234}, {G4, 234}, {D5, 234},
-    {C5, 234}, {REST, 234}, {Bb4, 234}, {REST, 234},
-    {A4, 234}, {REST, 234}, {A4, 234}, {A4, 234},
-    {C5, 234}, {REST, 234}, {Bb4, 234}, {A4, 234},
-    {G4, 234}, {REST, 234}, {G4, 234}, {Bb4, 234},
-    {A4, 234}, {Bb4, 234}, {A4, 234}, {Bb4, 234},
-    {G4, 234}, {REST, 234}, {G4, 234}, {Bb4, 234},
-    {A4, 234}, {Bb4, 234}, {A4, 234}, {Bb4, 234},
-    {0, 0}
-};
-
 // Keyboard Cat — robsoncouto arrangement, tempo=160, wholenote=1500ms
 // Octave 3/4 per robsoncouto source, mixed quarter/8th/dotted rhythms
 static const uint16_t melodyKeyboardCat[][2] = {
@@ -497,7 +482,6 @@ static const MelodyEntry hardcodedMelodies[] = {
     { melodyTakeOnMe,      MELODY_LEN(melodyTakeOnMe)      },
     { melodyPacMan,        MELODY_LEN(melodyPacMan)        },
     { melodyOdeToJoy,      MELODY_LEN(melodyOdeToJoy)      },
-    { melodyCoffinDance,   MELODY_LEN(melodyCoffinDance)   },
     { melodyKeyboardCat,   MELODY_LEN(melodyKeyboardCat)   },
     { melodyStillDRE,      MELODY_LEN(melodyStillDRE)      },
     { melodyFunkytown,     MELODY_LEN(melodyFunkytown)     },
@@ -506,16 +490,16 @@ static const char* hardcodedNames[] = {
     "Like a Prayer", "La Cucaracha", "Axel F", "The Godfather",
     "Die Forelle", "Tetris", "Nokia", "Fur Elise",
     "Pink Panther", "Super Mario", "Take On Me", "Pac-Man",
-    "Ode to Joy", "Coffin Dance", "Keyboard Cat",
+    "Ode to Joy", "Keyboard Cat",
     "Still D.R.E.", "Funkytown",
 };
 static const uint8_t HARDCODED_COUNT = sizeof(hardcodedMelodies) / sizeof(hardcodedMelodies[0]);
 
 // Mutable melody registry — populated at boot by buildMelodyRegistry()
 #define MAX_NOTES_PER_SONG 256
-static MelodyEntry melodies[256];
-static const char* melodyNames[256];
-static uint8_t MELODY_COUNT = 0;
+static MelodyEntry melodies[384];
+static const char* melodyNames[384];
+static uint16_t MELODY_COUNT = 0;
 
 // Parse all PROGMEM song definitions and append directly to the melody registry.
 void parseSongDefs() {
@@ -524,8 +508,9 @@ void parseSongDefs() {
     char* strBuf = (char*)malloc(STR_BUF_SZ);
     if (!strBuf) { Serial.println("[SONGS] malloc failed for strBuf"); return; }
 
-    uint8_t parsed = 0;
-    for (uint8_t i = 0; i < SONG_DEF_COUNT; i++) {
+    uint16_t parsed = 0;
+    for (uint16_t i = 0; i < SONG_DEF_COUNT; i++) {
+        if (MELODY_COUNT >= 384) { Serial.println("[SONGS] Registry full"); break; }
         SongDef def;
         memcpy_P(&def, &songDefs[i], sizeof(SongDef));
 
@@ -568,7 +553,7 @@ void parseSongDefs() {
 void buildMelodyRegistry() {
     // Parsed songs are already in the registry from parseSongDefs().
     // Append hardcoded melodies after them.
-    for (uint8_t i = 0; i < HARDCODED_COUNT; i++) {
+    for (uint16_t i = 0; i < HARDCODED_COUNT; i++) {
         melodies[MELODY_COUNT] = hardcodedMelodies[i];
         melodyNames[MELODY_COUNT] = hardcodedNames[i];
         MELODY_COUNT++;
@@ -578,8 +563,8 @@ void buildMelodyRegistry() {
 }
 
 // ---------- shuffle ----------
-static uint8_t shuffleOrder[256];
-static uint8_t shufflePos = 0;
+static uint16_t shuffleOrder[384];
+static uint16_t shufflePos = 0;
 static uint32_t shuffleSeed = 0;
 static bool playSpecific = false;
 Preferences prefs;
@@ -594,11 +579,11 @@ static uint32_t xorshift32(uint32_t* state) {
 }
 
 void shuffleMelodies(uint32_t seed) {
-    for (uint8_t i = 0; i < MELODY_COUNT; i++) shuffleOrder[i] = i;
+    for (uint16_t i = 0; i < MELODY_COUNT; i++) shuffleOrder[i] = i;
     uint32_t rng = seed;
-    for (uint8_t i = MELODY_COUNT - 1; i > 0; i--) {
-        uint8_t j = xorshift32(&rng) % (i + 1);
-        uint8_t tmp = shuffleOrder[i];
+    for (uint16_t i = MELODY_COUNT - 1; i > 0; i--) {
+        uint16_t j = xorshift32(&rng) % (i + 1);
+        uint16_t tmp = shuffleOrder[i];
         shuffleOrder[i] = shuffleOrder[j];
         shuffleOrder[j] = tmp;
     }
@@ -607,14 +592,14 @@ void shuffleMelodies(uint32_t seed) {
 void saveShuffleState(bool saveSeed) {
     prefs.begin("buzz", false);
     if (saveSeed) prefs.putULong("seed", shuffleSeed);
-    prefs.putUChar("pos", shufflePos);
+    prefs.putUShort("pos", shufflePos);
     prefs.end();
 }
 
 void loadShuffleState() {
     prefs.begin("buzz", true);
     shuffleSeed = prefs.getULong("seed", 0);
-    shufflePos = prefs.getUChar("pos", 0);
+    shufflePos = prefs.getUShort("pos", 0);
     prefs.end();
     if (shuffleSeed == 0 || shufflePos >= MELODY_COUNT) {
         shuffleSeed = esp_random();
@@ -638,7 +623,7 @@ struct MelodyPlayer {
 };
 
 MelodyPlayer player = { nullptr, 0, 0, 0, 0, false, false, false };
-uint8_t currentMelodyIndex = 0;
+uint16_t currentMelodyIndex = 0;
 
 void playCurrentNote() {
     uint16_t freq = player.melody[player.noteIndex][0];
@@ -658,7 +643,7 @@ void playCurrentNote() {
     player.inLoopPause = false;
 }
 
-void startMelody(uint8_t index) {
+void startMelody(uint16_t index) {
     player.melody = melodies[index].notes;
     player.length = melodies[index].length;
     player.noteIndex = 0;
@@ -914,8 +899,8 @@ connect();ui();
 
 // Pick the next melody from the shuffle order and advance the position.
 // Reshuffles and persists state when the full rotation completes.
-uint8_t nextShuffleMelody() {
-    uint8_t idx = shuffleOrder[shufflePos];
+uint16_t nextShuffleMelody() {
+    uint16_t idx = shuffleOrder[shufflePos];
     shufflePos++;
     if (shufflePos >= MELODY_COUNT) {
         shuffleSeed = esp_random();
@@ -1080,23 +1065,21 @@ void setup() {
         request->send(response);
     });
     server.on("/songs.json", HTTP_GET, [](AsyncWebServerRequest* request) {
-        String json = "[";
-        for (uint8_t i = 0; i < MELODY_COUNT; i++) {
-            if (i > 0) json += ',';
-            json += "{\"i\":";
-            json += i;
-            json += ",\"n\":\"";
-            // Escape any quotes in song name
+        AsyncResponseStream* response = request->beginResponseStream("application/json");
+        response->print("[");
+        for (uint16_t i = 0; i < MELODY_COUNT; i++) {
+            if (i > 0) response->print(",");
+            response->printf("{\"i\":%d,\"n\":\"", i);
             const char* n = melodyNames[i];
             while (*n) {
-                if (*n == '"') json += '\\';
-                json += *n;
+                if (*n == '"') response->print("\\");
+                response->print(*n);
                 n++;
             }
-            json += "\"}";
+            response->print("\"}");
         }
-        json += "]";
-        request->send(200, "application/json", json);
+        response->print("]");
+        request->send(response);
     });
     server.onNotFound([](AsyncWebServerRequest* request) {
         Serial.printf("[HTTP] 404: %s\n", request->url().c_str());
@@ -1106,6 +1089,7 @@ void setup() {
     // Parse songs and build melody registry
     parseSongDefs();
     buildMelodyRegistry();
+    Serial.printf("[HEAP] Free after registry: %u bytes\n", ESP.getFreeHeap());
     loadShuffleState();
 
     server.begin();
